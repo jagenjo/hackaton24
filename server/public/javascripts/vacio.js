@@ -83,7 +83,15 @@ class Editor {
         for(var i in json.actions)
         {
             console.log("action: ",i)
+            var info = json.actions[i];
             //define node here
+            function nodeExec(_in)
+            {
+                console.log(this.constructor.info.desc)
+            }
+            var node_class = LiteGraph.wrapFunctionAsNode("actions/" + info.name, nodeExec,[LiteGraph.ACTION],LiteGraph.EVENT);
+            node_class.info = info;
+            
         }
     }
 

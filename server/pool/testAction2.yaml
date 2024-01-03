@@ -1,0 +1,5 @@
+name: AnotherAction
+desc: Some Other Action
+script: |
+  echo "hello from another"
+  echo "hello too"

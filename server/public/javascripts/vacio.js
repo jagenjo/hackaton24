@@ -28,8 +28,8 @@ class Session {
     }
 }
 
-//connects to backend
-class Backend {
+//connects to backend to execute stuff remotely
+class BackendClient {
     constructor()
     {
 
@@ -41,6 +41,7 @@ class Backend {
         this.socket.onmessage = this.onMessage.bind(this);
         this.socket.onopen = ()=>{  console.log("socket open"); this.send("hello from client") }
         this.socket.onclose = (err)=>{ console.log("socket closed",err) }
+        this.socket.onerror = (err)=>{ console.log("error",err) }
     }
 
     send(msg)
@@ -52,13 +53,13 @@ class Backend {
         this.socket.send(msg);
     }
 
-    onMessage(msg)
+    onMessage(msg,ws)
     {
-        console.log("Backend Client",msg);
+        console.log("Backend <<",msg.data);
     }
 }
 
-//shows editor
+//shows graph editor in the screen
 class Editor {
     constructor( container )
     {
@@ -70,8 +71,8 @@ class Editor {
     connect(url)
     {
         if(!this.backend)        
-            this.backend = new Backend();
-        this.backend.connect( "ws://" + (url || location.host) + "/ws/" );
+            this.backend = new BackendClient();
+        this.backend.connect( "ws://" + (url || location.host) );
     }
 
     setSession(session)
@@ -83,4 +84,4 @@ class Editor {
 
 
 
-export { Editor, Session, Backend }
+export { Editor, Session, BackendClient }

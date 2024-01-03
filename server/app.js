@@ -1,39 +1,45 @@
-import express from 'express'
-import expressWs from 'express-ws'
-import WebSocket from 'ws'  //This is the type package @types/ws
-import logger from 'morgan';
+//app launcher
+//it instantiates express, expressWS and binds events
+//it also servers the public folder for static files
+//it creates the BackendServer
+
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Server } from './backend.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import logger from 'morgan';
+import express from 'express';
+import ExpressWs from 'express-ws'
+var app = ExpressWs(express()).app;
 
-let wsConnections = []
-const app = expressWs(express(), undefined, {wsOptions: {clientTracking: true}}).app
+app.use(function (req, res, next) {
+  return next();
+});
+
+app.use(logger('dev')); //to log
+app.use(express.static(path.join(__dirname, 'public'))); //to serve static files
+
+app.get('/', function(req, res, next){
+  console.log('get route');
+  res.end();
+});
 
 //our server
-var backend = new Server();
+import { BackendServer } from './backend.js'
+var server = new BackendServer();
 
-//ws messages
-app.ws('/ws', (ws) => {
-  //IT NEVER ENTERS HERE
-  const wsClientId = randomBytes(2).toString('hex')
-  console.log(`New websocket connection open by client ${wsClientId}`)
-  ws.send(JSON.stringify({data: 'hello from server'}))
-  wsConnections.push({[wsClientId]: ws})
+app.ws('/', function(ws, req) {
+    //console.log('user connected');
+    server.onEnter(ws,req);
+    ws.on('message', function(msg) {
+        //console.log(msg);
+        server.onMessage(msg,ws);
+    });
+    ws.on('close', function(msg) {
+        server.onLeave(ws,req);
+    });
+});
 
-  ws.on('message', function(msg) {
-    console.log(msg);
-    backend.onMessage(msg, ws);
-  });
-})
-
-//http reqs
-app.use(logger('dev'));
-app.use(express.static(path.join(__dirname, 'public')));
-
-
-
-//launch
-let port = 3000
-app.listen( port, () => console.log(`API Server started on port ${port}!`))
+var port = 3000;
+console.log("Listening in port " + port)
+app.listen(port);

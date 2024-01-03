@@ -14,6 +14,7 @@
     "http-errors": "~1.6.3",
     "jade": "~1.11.0",
     "morgan": "~1.9.1",
-    "websockets": "^0.2.0"
+    "websockets": "^0.2.0",
+    "yaml": "^2.3.4"
   }
 }

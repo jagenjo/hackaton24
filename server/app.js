@@ -19,8 +19,9 @@ app.use(function (req, res, next) {
 app.use(logger('dev')); //to log
 app.use(express.static(path.join(__dirname, 'public'))); //to serve static files
 
+//??
 app.get('/', function(req, res, next){
-  console.log('get route');
+  //console.log('get route');
   res.end();
 });
 
@@ -39,6 +40,8 @@ app.ws('/', function(ws, req) {
         server.onLeave(ws,req);
     });
 });
+
+server.registerHTTP(app);
 
 var port = 3000;
 console.log("Listening in port " + port)

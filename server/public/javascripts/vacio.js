@@ -63,9 +63,28 @@ class BackendClient {
 class Editor {
     constructor( container )
     {
+        this.loadConfig();
+
         this.graphcanvas = new LGraphCanvas( container, null );
         this.graphcanvas.resize();
         this.graphcanvas.autoresize = true;
+    }
+
+    loadConfig()
+    {
+        fetch("./info").then(resp=>resp.json()).then((json)=>{
+            this.processConfig(json);
+        })
+    }
+
+    processConfig(json)
+    {
+        this.config = json;
+        for(var i in json.actions)
+        {
+            console.log("action: ",i)
+            //define node here
+        }
     }
 
     connect(url)

@@ -1,0 +1,4 @@
+name: TestAction
+script: |
+  echo "hello"
+  echo "hello2"

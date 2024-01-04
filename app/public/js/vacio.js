@@ -4,12 +4,18 @@ var VACIO = {}
 
 //represents one session from one user
 class Session {
-    constructor()
+    constructor(backend)
     {
         this.id = generateId();
+        this.backend = backend;
+
         this.graph = new LGraph();
+        this.graph.session = this;
         this.start_node = null;
         this.finish_node = null;
+
+        this.current_node = null;
+
     }
 
     init()
@@ -19,17 +25,60 @@ class Session {
         node_start.pos = [200, 200];
         node_start.removable = true;
         graph.add(node_start);
+
+        var node = LiteGraph.createNode("actions/sleep");
+        node.pos = [600, 200];
+        graph.add(node);
         
         var node_finish = LiteGraph.createNode("actions/finish");
-        node_finish.pos = [700, 200];
+        node_finish.pos = [1000, 200];
         node_finish.removable = true;
         graph.add(node_finish);
 
-        node_start.connect(0, node_finish, 0);
+        node_start.connect(0, node, 0);
+        node.connect(0, node_finish, 0);
 
         this.start_node = node_start;
         this.finish_node = node_finish;
     }
+
+    start()
+    {
+    }
+
+    //received when started
+    onExecutionStarted(node,data)
+    {
+        this.current_node = node;
+        node.boxcolor = "#aaaa00";
+    }
+
+    //in case the action outputs to some pipe
+    onExecutionProgress(node,data)
+    {
+        console.log("std",data);
+    }
+
+    //in case the action outputs to some pipe
+    onExecutionError(node,data)
+    {
+        node.boxcolor = "#FF0000";
+    }   
+
+    //received when done (data:{stdout,stderr,code})
+    onExecutionDone(node,data)
+    {
+        console.log("done:",data);
+        node.boxcolor = "#00FF00";
+        if(node == this.finish_node)
+        {
+            if(this.finish_callback)
+                this.finish_callback(this);
+            return true;//finished
+        }
+        node.triggerSlot(0);//next
+        return false;
+    }    
 }
 
 //connects to backend to execute stuff remotely
@@ -37,7 +86,7 @@ class BackendClient {
     constructor()
     {
         this.config = {};
-        this.sessions = {}
+        this.sessions = {} //supports several sessions
     }
 
     loadConfig()
@@ -70,8 +119,8 @@ class BackendClient {
         function onNodeAction(e)
         {
             if(e == "_in")
-                this.graph.backend.startExecution(this);
-            else if(e == "end")
+                this.graph.session.backend.executeNode(this);
+            else if(e == "end") //not necessary
                 this.triggerSlot(0);
         }
     }
@@ -112,11 +161,14 @@ class BackendClient {
     {
         if(msg.data[0] != "{") 
             return console.log("Backend <<",msg.data);
-            
+        //console.log("<<",msg.data);
         var event = JSON.parse( msg.data );
         var target_node = null;
         if(event.session_id != null && event.node_id != null )
-        target_node = this.findNode( event.session_id, event.node_id );
+            target_node = this.findNode( event.session_id, event.node_id );
+        var session = null;
+        if(event.session_id != null)
+            session = this.sessions[event.session_id];
 
         switch(event.type)
         {
@@ -125,31 +177,34 @@ class BackendClient {
                 break;
             case "ACTION_STARTED": 
                 if(target_node)
-                    this.onExecutionStarted( target_node, event.data );
+                    session.onExecutionStarted( target_node, event.data );
                 break;
-            case "ACTION_HALTED": 
+            case "ACTION_ERROR": 
+                if(event.error)
+                    console.error(event.error);
                 if(target_node)
-                    this.onExecutionHalted( target_node, event.data );
+                    session.onExecutionError( target_node, event.data );
                 break;
             case "ACTION_PROGRESS": 
                 if(target_node)
-                    this.onExecutionProgress( target_node, event.data );
+                    session.onExecutionProgress( target_node, event.data );
                 break;
             case "ACTION_FINISHED": 
                 if(target_node)
-                    this.onExecutionDone( target_node, event.data );
+                    session.onExecutionDone( target_node, event.data );
                 break;
             default: console.warn("unknown action", event.type);
         }
     }
 
-    playSession( session )
+    playSession( session, finish_callback )
     {
         //already available
         if( this.sessions[ session.id ] )
             this.killSession( session );
         this.sessions[ session.id ] = session;
         this.send({ type:"NEW_SESSION", session_id: session.id }); //wait for session ready
+        session.finish_callback = finish_callback || null;
     }
 
     killSession( session )
@@ -164,12 +219,14 @@ class BackendClient {
         if(!session)
             return;
         //execute first node
-        this.startExecution(session.start_node,session);
+        session.start();
+        this.executeNode(session.start_node);
     }
 
     //send signal to backed to execute
-    startExecution(node,session)
+    executeNode(node)
     {
+        var session = node.graph.session;
         var action = node.constructor.info.name;
         this.send({ 
             type:"START_ACTION",
@@ -178,7 +235,6 @@ class BackendClient {
             action: action,
             params: [] //TODO
         });
-        this.current_node = node;
     }
 
     findNode( session_id, node_id )
@@ -187,29 +243,6 @@ class BackendClient {
         if(!session)
             return null;
         return session.graph.getNodeById( node_id );
-    }
-
-    //received when started
-    onExecutionStarted(node,data)
-    {
-        node.boxcolor = "orange";
-    }
-
-    //in case the action outputs to some pipe
-    onExecutionProgress(node,data)
-    {
-    }
-
-    //in case the action outputs to some pipe
-    onExecutionHalted(node,data)
-    {
-        node.boxcolor = "red";
-    }   
-
-    //received when done
-    onExecutionDone(node,data)
-    {
-        node.boxcolor = "green";
     }
 }
 
@@ -227,7 +260,7 @@ class Editor {
         this.backend = new BackendClient();
         this.backend.loadConfig().then(()=>this.onReady())
 
-        this.session = new Session();
+        this.session = new Session(this.backend);
 
         //prepare interface
         this.graphcanvas = new LGraphCanvas( container, null );
@@ -254,7 +287,14 @@ class Editor {
         var button = document.body.querySelector("#play");
         button.classList.add("working");
         button.innerText = "Stop";
-        this.backend.playSession( this.session );
+        this.backend.playSession( this.session, this.onSessionFinished.bind(this) );
+    }
+
+    onSessionFinished()
+    {
+        var button = document.body.querySelector("#play");
+        button.classList.remove("working");
+        button.innerText = "Play";
     }
 };
 

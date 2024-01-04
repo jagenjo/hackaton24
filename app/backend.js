@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import YAML from 'yaml'
-import { exec, ChildProcess } from 'child_process';
+import { spawn, exec, ChildProcess } from 'child_process';
 
 var paths = {
     session: "sessions/",
     pool: "pool/"
 }
+
+//spawn("sleep",["3"])
 
 var actionsDB = {};
 
@@ -28,27 +30,56 @@ class BackendSession
         }
     }
 
-    executeAction( action, params, node_id )
+    executeAction( action, params, node_id, output_callback )
     {
         var that = this;
         var action_info = actionsDB[action];
         if(!action_info)
             return false;
+
         console.log("executing action:", action);
 
-        //execute code
+        //execute code sync
+        /*
         var cp = exec('ls', function(err, stdout, stderr) {
             // handle err, stdout, stderr
             that.progressAction(node_id,stdout,stderr);
         });
+        */
 
-        return true;
-    }
+        return new Promise((resolve,reject)=>{
+            var t = tokenize(action_info.script);
+            console.log(t);
+            const child = spawn(t[0], t.slice(1));
+            //const child = spawn(action_info.script, []);
+            //const child = spawn('sh', [action_info.script]);
+            //const child = spawn('sleep', [5]);
 
-    progressAction(node_id, stdout, stderr)
-    {
-        console.log(stdout);
-        console.log(stderr);
+            var stdout = [];
+            var stderr = [];
+
+            child.stdout.on('data', (data) => {
+                stdout.push(data.toString());
+                if(output_callback)
+                    output_callback(node_id,"out",data);
+            });
+            
+            child.stderr.on('data', (data) => {
+                stderr.push(data.toString());
+                if(output_callback)
+                    output_callback(node_id,"err",data);
+            });
+
+            child.on('error', (err) => {
+                console.log(`Error in action ${err}`);
+                reject(node_id,err);
+              });              
+            
+            child.on('exit', (code) => {
+              console.log(`Child exited with code ${code}`);
+              resolve({node_id,code,stdout,stderr});
+            });         
+        });
     }
 
     destroy()
@@ -108,6 +139,7 @@ class BackendServer
                     msg.user_id = this.id;
                     msg = JSON.stringify(msg);
                 }
+                //console.log(">>",msg)
                 this.connection.send(msg);
             }
         };
@@ -154,11 +186,14 @@ class BackendServer
                 break;
             case "START_ACTION":
                 if(session)
-                    if(!session.executeAction(event.action, event.params, event.node_id))
-                        user.send({type:"ERROR",session_id:event.session_id, node_id: event.node_id});
-                    else
-                        user.send({type:"ACTION_STARTED",session_id:event.session_id, node_id: event.node_id});
-                    break;
+                {
+                    session.executeAction(event.action, event.params, event.node_id)
+                    .then((data)=>user.send({type:"ACTION_FINISHED",session_id:event.session_id, node_id: event.node_id, data}))
+                    .catch((err)=>user.send({type:"ACTION_ERROR",session_id:event.session_id, node_id: event.node_id, error: err}));
+
+                    user.send({type:"ACTION_STARTED",session_id:event.session_id, node_id: event.node_id});
+                }
+                break;
             default:
                 console.log("Unknown type: " , event.type);
         }
@@ -193,6 +228,24 @@ class BackendServer
     }
 }
 
+function tokenize(str)
+{
+    //The parenthesis in the regex creates a captured group within the quotes
+    var myRegexp = /[^\s"]+|"([^"]*)"/gi;
+    var result = [];
+
+    do {
+        //Each call to exec returns the next regex match as an array
+        var match = myRegexp.exec(str);
+        if (match != null)
+        {
+            //Index 1 in the array is the captured group if it exists
+            //Index 0 is the matched text, which we use if no captured group exists
+            result.push(match[1] ? match[1] : match[0]);
+        }
+    } while (match != null);
+    return result; 
+}
 
 
 export { BackendServer };

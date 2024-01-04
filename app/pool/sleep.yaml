@@ -1,0 +1,3 @@
+name: sleep
+desc: Waits some time
+script: sleep 3

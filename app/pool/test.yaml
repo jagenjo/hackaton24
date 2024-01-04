@@ -1,5 +1,5 @@
 name: test_script
-desc: Some Other Action
+desc: multiline script
 script: |
   echo "listing files..."
   ls -l

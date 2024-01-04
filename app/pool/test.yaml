@@ -1,0 +1,5 @@
+name: test_script
+desc: Some Other Action
+script: |
+  echo "listing files..."
+  ls -l

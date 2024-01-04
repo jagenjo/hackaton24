@@ -1,0 +1,3 @@
+name: log
+desc: writes text on console
+script: echo "$1"

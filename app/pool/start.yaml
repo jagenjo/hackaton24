@@ -1,0 +1,3 @@
+name: start
+desc: Starts the process
+script: echo "Starting..."

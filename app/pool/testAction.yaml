@@ -1,5 +1,0 @@
-name: TestAction
-desc: Some Action
-script: |
-  echo "hello"
-  echo "hello2"

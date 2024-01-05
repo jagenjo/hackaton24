@@ -1,0 +1,7 @@
+name: cat
+desc: writes to file
+widgets:
+  - label: str
+    type: text
+    value: ""
+script: cat hello > test_cat.txt

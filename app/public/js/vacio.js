@@ -44,13 +44,16 @@ class Session {
 
     start()
     {
+        //clear leds
+        for(var i = 0; i < this.graph._nodes.length; ++i)
+            this.graph._nodes[i].boxcolor = null;
     }
 
     //received when started
     onExecutionStarted(node,data)
     {
         this.current_node = node;
-        node.boxcolor = "#aaaa00";
+        node.boxcolor = "#FFaa00";
     }
 
     //in case the action outputs to some pipe
@@ -108,12 +111,19 @@ class BackendClient {
         }
     }
     
-    buildNodeClassFromInfo(info)
+    buildNodeClassFromInfo(info, type)
     {
         //define node here
         function nodeExec(_in){} //empty place holder
-        var node_class = LiteGraph.wrapFunctionAsNode("actions/" + info.name, nodeExec,[LiteGraph.ACTION],LiteGraph.EVENT);
+        var params_type = [LiteGraph.ACTION];
+        var return_type = LiteGraph.EVENT;
+        if(info.type == "begin")
+            params_type = null;
+        if(info.type == "end")
+            return_type = null;
+        var node_class = LiteGraph.wrapFunctionAsNode("actions/" + info.name, nodeExec,params_type,return_type);
         node_class.prototype.onAction = onNodeAction;
+        node_class.prototype.onDrawBackground = onNodeDrawBackground;
         node_class.info = info;
 
         function onNodeAction(e)
@@ -122,6 +132,12 @@ class BackendClient {
                 this.graph.session.backend.executeNode(this);
             else if(e == "end") //not necessary
                 this.triggerSlot(0);
+        }
+
+        function onNodeDrawBackground(ctx)
+        {
+            this.color = this.in_execution ? "#353" : null;
+            this.bgcolor = this.in_execution ? "#131" : null;
         }
     }
 
@@ -191,7 +207,10 @@ class BackendClient {
                 break;
             case "ACTION_FINISHED": 
                 if(target_node)
+                {
+                    target_node.in_execution = false;
                     session.onExecutionDone( target_node, event.data );
+                }
                 break;
             default: console.warn("unknown action", event.type);
         }
@@ -209,7 +228,7 @@ class BackendClient {
 
     killSession( session )
     {
-        this.send({ type:"KILL_SESSION", session_id: session.id }); //wait for session ready
+        this.send({ type:"KILL_SESSION", session_id: session.id });
         delete this.sessions[ session.id ];
     }
 
@@ -228,6 +247,7 @@ class BackendClient {
     {
         var session = node.graph.session;
         var action = node.constructor.info.name;
+        node.in_execution = true;
         this.send({ 
             type:"START_ACTION",
             session_id: session.id,
@@ -288,13 +308,16 @@ class Editor {
         button.classList.add("working");
         button.innerText = "Stop";
         this.backend.playSession( this.session, this.onSessionFinished.bind(this) );
+
     }
 
+    //called from playSession callback
     onSessionFinished()
     {
         var button = document.body.querySelector("#play");
         button.classList.remove("working");
         button.innerText = "Play";
+        alert("Session Finished");
     }
 };
 

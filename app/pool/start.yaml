@@ -1,3 +1,4 @@
 name: start
 desc: Starts the process
+type: begin
 script: echo "Process Started"

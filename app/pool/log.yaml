@@ -1,3 +1,5 @@
 name: log
 desc: writes text on console
+params:
+  text : string
 script: echo "$1"

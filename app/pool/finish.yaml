@@ -1,3 +1,4 @@
 name: finish
 desc: Ends the process
+type: end
 script: echo "Process ended"

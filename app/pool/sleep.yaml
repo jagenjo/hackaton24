@@ -1,7 +1,8 @@
 name: sleep
 desc: Waits some time
-widgets:
-  - label: time
-    type: number
-    value: 3
-script: sleep 3
+params:
+  time : 3
+script: |
+    echo "sleeping $time seconds"
+    sleep $time
+    echo "sleep done"

@@ -15,8 +15,9 @@ class BackendServer
         this.users = {};
         this.online_users = 0;
 
-        ActionsDB.load( paths.pool );
+        ActionsDB.load( paths.pool, true );
         this.sessions = {}; //all
+
     }
 
     onEnter(ws)
@@ -76,7 +77,7 @@ class BackendServer
         switch(event.type)
         {
             case "NEW_SESSION": 
-                this.startSession(user, event.session_id);
+                this.startSession(user, event.session_id, event.data);
                 break;
             case "KILL_SESSION": 
                 //TO OD
@@ -84,9 +85,9 @@ class BackendServer
             case "START_ACTION":
                 if(session)
                 {
-                    session.executeAction(event.action, event.params, event.node_id)
-                    .then((data)=>user.send({type:"ACTION_FINISHED",session_id:event.session_id, node_id: event.node_id, data}))
-                    .catch((err)=>{user.send({type:"ACTION_ERROR",session_id:event.session_id, node_id: event.node_id, error: err});console.error(err)});
+                    session.executeAction(event.action, event.params, event.node_id, onNodeStd)
+                    .then((data)=>user.send({type:"ACTION_FINISHED",session_id:event.session_id, node_id: event.node_id, data, time: Date.now()}))
+                    .catch((err)=>{user.send({type:"ACTION_ERROR",session_id:event.session_id, node_id: event.node_id, error: err,time: Date.now()});console.error(err)});
 
                     user.send({type:"ACTION_STARTED",session_id:event.session_id, node_id: event.node_id});
                 }
@@ -94,15 +95,21 @@ class BackendServer
             default:
                 console.log("Unknown type: " , event.type);
         }
+
+        function onNodeStd(node,std,data)
+        {
+            //log locally too?
+            user.send({type:"ACTION_PROGRESS",session_id:event.session_id, node_id: event.node_id, std, data, time: Date.now()});
+        }
     }
 
-    startSession(user, session_id)
+    startSession(user, session_id, graph_data)
     {
         var session = new ActionsHost( session_id, paths.session );
         this.sessions[ session_id ] = session;
         user.sessions[ session_id ] = session;
         session.prepare();
-        user.send({type:"SESSION_READY",session_id});
+        user.send({type:"SESSION_READY",session_id,time: Date.now()});
     }
 
     registerHTTP(app)
@@ -111,11 +118,24 @@ class BackendServer
             res.send(JSON.stringify(this.getInfo()));
             res.end();
           });
+
+          app.get('/session',(req, res, next)=>{
+            var session_id = req.params.session_id;
+            res.send(JSON.stringify(this.getSessionInfo(session_id)));
+            res.end();
+          });          
     }
 
     getInfo()
     {
         return { actions: ActionsDB.actions }
+    }
+
+    getSessionInfo(session_id)
+    {
+        if(!session_id)
+            return {msg:"missing session_id"}
+        return {msg:"data here"}
     }
 
     //called when closing the server

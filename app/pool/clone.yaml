@@ -1,0 +1,6 @@
+name: clone
+desc: loads repo
+params:
+  repo_url : string
+  repo_branch : string
+script: git clone $repo_url

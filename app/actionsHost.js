@@ -1,10 +1,11 @@
 //This file is in charge of providing a sandbox to execute
 //actions inside a folder
 
-import fs from 'fs';
-import path from 'path';
+import fs from 'fs'
+import path from 'path'
 import YAML from 'yaml'
-import { spawn, exec, ChildProcess } from 'child_process';
+import { spawn, exec, ChildProcess } from 'child_process'
+import { performance } from 'perf_hooks'
 
 class ActionsHost
 {
@@ -20,12 +21,10 @@ class ActionsHost
     prepare()
     {
         //create folder
-        if (!fs.existsSync(this.folder)) {
-            console.log(" + creating host ");
-            fs.mkdirSync(this.folder);
-        }
-        else
+        if (fs.existsSync(this.folder))
             this.reset(); //remove content
+        console.log(" + creating host ");
+        fs.mkdirSync(this.folder);
     }
 
     executeAction( action, params, node_id, output_callback )
@@ -36,17 +35,27 @@ class ActionsHost
             return false;
 
         console.log(" ## executing action:", action);
+        var start_time = performance.now();
+        //console.log(params);
 
         //execute code sync
         /*
-        var cp = exec('ls', function(err, stdout, stderr) {
+        var cp = exec('ls -l', function(err, stdout, stderr) {
             // handle err, stdout, stderr
             that.progressAction(node_id,stdout,stderr);
         });
         */
 
         return new Promise((resolve,reject)=>{
-            var t = tokenize(action_info.script);
+
+            var script = action_info.script;
+            var joined_script = script.split("\n").join(" ; "); //clear breaklines
+            //replace params
+            for(var i in params)
+                joined_script = joined_script.replaceAll("$" + i, params[i]);
+            
+            /*
+            var t = tokenize(script);
             //replace with params
             for(var i = 1; i < t.length; ++i)
             {
@@ -54,30 +63,44 @@ class ActionsHost
                 if(token[0] == '$')
                     t[i] = params[ token.substr(1) ] || "";
             }
+
+            //check folder is ready
+            if (!fs.existsSync(this.folder)) {
+                reject("folder not found");
+            }
+            */
+
             //console.log(t);
-            const child = spawn(t[0], t.slice(1), {cwd: this.folder, env: process.env});
-            that.child_processes.push(child);
+            //const child = spawn(t[0], t.slice(1), {cwd: this.folder, env: process.env});
+            const child = spawn(joined_script, [], {shell:true, cwd: this.folder, env: process.env});
             //const child = spawn(action_info.script, []);
             //const child = spawn('sh', [action_info.script]);
-            //const child = spawn('sleep', [5]);
+            //const child = spawn('sleep', [5]); //"sleep 5"
 
+            that.child_processes.push(child);
             var stdout = [];
             var stderr = [];
 
             child.stdout.on('data', (data) => {
-                stdout.push(data.toString());
+                var str = data.toString();
+                console.log(" - - ", str );
+                stdout.push(str);
                 if(output_callback)
-                    output_callback(node_id,"out",data);
+                    output_callback(node_id,"out",str);
             });
             
             child.stderr.on('data', (data) => {
-                stderr.push(data.toString());
+                var str = data.toString();
+                console.log(str);
+                stderr.push(str);
                 if(output_callback)
-                    output_callback(node_id,"err",data);
+                    output_callback(node_id,"err",str);
             });
 
             child.on('error', (err) => {
-                console.log(`Error in action ${err}`);
+                var str = err.toString()
+                console.log(str);
+                console.log(`Error in action ${str}`);
                 reject(node_id,err);
               });              
             
@@ -85,8 +108,9 @@ class ActionsHost
               //console.log(` * Action finished code ${code}`);
               var index = that.child_processes.indexOf(this);
               that.child_processes.splice(index,1);
-              resolve({node_id,code,stdout,stderr});
-            });         
+              var elapsed = performance.now() - start_time;
+              resolve({node_id,code,stdout,stderr,elapsed});
+            });
         });
     }
 
@@ -128,12 +152,12 @@ var ActionsDB = {
             if(files[i].indexOf("yaml") != -1)
             {
                 var action = this.registerAction(path + "/" + files[i]);
-                console.log(" * " + action.name)
+                console.log(" * " + action.name + " :: " + action.desc)
             }
 
-
+        if(check_changes)
         fs.watch(path, (eventType, filename) => {
-            if(eventType == "change")
+            if(eventType == "change" || 0)
             {
                 console.log("action updated: ", filename);
                 that.registerAction( path + "/" + filename);

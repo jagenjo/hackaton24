@@ -20,7 +20,7 @@ app.use(function (req, res, next) {
   return next();
 });
 
-app.use(logger('dev')); //to log any HTTP request
+//app.use(logger('dev')); //to log any HTTP request
 app.use(express.static(path.join(__dirname, 'public'))); //to serve static files
 
 //??

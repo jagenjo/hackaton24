@@ -17,44 +17,162 @@ a {
   color: #00B7FF;
 }
 
-h1 {
+#main {
+  width: 100%;
+  height: 100%;
+}
+
+/* EDITOR STUFF */
+
+.vicio-editor {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.vicio-editor h1 {
   margin: 10px;
   padding:0;
   color: #1fb65e
 }
 
-#header {
+.vicio-editor .header {
   height: 60px;
   width: 100%;
   background-color:#414242;
   overflow:auto;
 }
 
-#header .tools { margin-left: 400px;}
+.vicio-editor .header .tools { margin-left: 400px;}
 
-#header h1 { display: inline-block; }
-#header button { 
+.vicio-editor .header h1 { display: inline-block; }
+.vicio-editor button { 
   font-size: 20px;
+  min-width: 140px;
   margin: 10px;
-  margin-top:0px;
   padding: 10px;
   border-radius: 10px;
   border: 0;
-  background-color:#1fb65e;
+  background-color:#6b6b6b;
   cursor: pointer;
 }
 
-#header button:hover {
+.vicio-editor .header button { 
+  margin-top:0px;
+  background-color:#1fb65e;
+}
+
+.vicio-editor button:hover {
+  color: white;
   background-color:#85d1a5;
 }
 
-#header button.working {
+.vicio-editor .header button.working {
   background-color:#f0792a;
 }
 
-#workarea {
+.vicio-editor .workarea {
   height: calc( 100% - 60px );
   width: 100%;
   background-color:#000;
   overflow: hidden;
 }
+
+.vicio-editor .workarea .section {
+  width: 100%;
+  height: 100%;
+  background-color: #222;
+  overflow: hidden;
+}
+
+.vicio-editor .workarea .section.hidden {
+  display: none;
+}
+
+.vicio-editor .workarea .node-view {
+  position: relative;
+}
+
+.vicio-editor .workarea .node-view .node-info, .vicio-editor .workarea .node-view .node-log {
+  position: absolute;
+  top: 0;
+  width: calc(50% - 10px);
+  height: calc(100% - 10px);
+  display: inline-block;
+  padding: 5px;
+  margin: 5px;
+  border-radius: 10px;
+  background-color: #333;
+}
+
+.vicio-editor .workarea .node-view .node-info {
+  left: 0;
+  width: calc(30% - 10px);  
+}
+
+.vicio-editor .workarea .node-view .node-log {
+  right: 0;
+  width: calc(70% - 10px);    
+  background-color: black;
+  color: #AFA;
+  font-family: Monospace,Console;
+  padding: 20px;
+  font-size: 20px;
+  overflow: auto;
+}
+
+.vicio-editor .workarea .node-view .node-log .log-entry {
+  background-color: #222;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+}
+
+.vicio-editor .workarea .node-view .node-log .log-entry .time {
+  color: white;
+  border-right: 4px solid #444;
+  margin-right: 4px;
+}
+
+.vicio-editor .workarea .node-view .node-log .log-entry.err {
+  color: #888;
+}
+
+.node-view {
+  font-size: 20px;
+  color: #888;
+}
+
+
+.node-view h2 {
+  color: #AAA;
+}
+
+.node-view .node-desc {
+  display: inline-block;
+  margin: 10px;
+}
+
+.node-view .params-list {
+  padding-top: 20px;
+}
+
+.node-view .params-list .param .label {
+  display: inline-block;
+  width: 140px;
+  text-align: right;
+  padding-right: 10px;
+  font-size: 20px;
+  color: #AAA;
+}
+
+.node-view .params-list .param .value input {
+  background-color: #1d1d1d;
+  color: white;
+  border: 0;
+  padding: 4px;
+  font-size: 20px;
+  border-radius: 6px;
+  text-align: right;
+}
+

@@ -11,6 +11,7 @@ class Session {
 
         this.graph = new LGraph();
         this.graph.session = this;
+        this.graph.onNodeAdded = this.onNodeCreated.bind(this);
         this.start_node = null;
         this.finish_node = null;
 
@@ -24,6 +25,7 @@ class Session {
         var node_start = LiteGraph.createNode("actions/start");
         node_start.pos = [200, 200];
         node_start.removable = true;
+        node_start.clonable = false;
         graph.add(node_start);
 
         var node = LiteGraph.createNode("actions/sleep");
@@ -33,6 +35,7 @@ class Session {
         var node_finish = LiteGraph.createNode("actions/finish");
         node_finish.pos = [1000, 200];
         node_finish.removable = true;
+        node_finish.clonable = false;
         graph.add(node_finish);
 
         node_start.connect(0, node, 0);
@@ -46,32 +49,60 @@ class Session {
     {
         //clear leds
         for(var i = 0; i < this.graph._nodes.length; ++i)
-            this.graph._nodes[i].boxcolor = null;
+        {
+            var node = this.graph._nodes[i];
+            node.boxcolor = null;
+            node.execution_state = 0;
+        }
+    }
+
+    onNodeCreated(node)
+    {
+        if(!node.constructor.info) //generic node
+            return;
+        var action_info = node.constructor.info;
+        node.params = {};
+        for(var i in action_info.params)
+            node.params[i] = action_info.params[i];
+        console.log("node created",action_info.name);
     }
 
     //received when started
     onExecutionStarted(node,data)
     {
+        node.execution_state = 1;
         this.current_node = node;
-        node.boxcolor = "#FFaa00";
+        node.log = [];
+        //node.boxcolor = "#FFaa00";
     }
 
     //in case the action outputs to some pipe
-    onExecutionProgress(node,data)
+    onExecutionProgress(node,std,data,timestamp)
     {
         console.log("std",data);
+        node.log.push({timestamp, std, data});
     }
 
     //in case the action outputs to some pipe
-    onExecutionError(node,data)
+    onExecutionError(node,data,timestamp)
     {
+        node.execution_state = -1;
+        console.log("error",data);
         node.boxcolor = "#FF0000";
     }   
 
     //received when done (data:{stdout,stderr,code})
-    onExecutionDone(node,data)
+    onExecutionDone(node,execution_data)
     {
-        console.log("done:",data);
+        node.execution_state = 2;
+
+        //console.log("done:",execution_data);
+        if(execution_data.code != 0)
+        {
+            //error?
+            node.log.push("execution ended with code", execution_data.code);
+        }
+        node.execution_data = execution_data;
         node.boxcolor = "#00FF00";
         if(node == this.finish_node)
         {
@@ -90,6 +121,8 @@ class BackendClient {
     {
         this.config = {};
         this.sessions = {} //supports several sessions
+
+        this.onNodeStateUpdate = null;
     }
 
     loadConfig()
@@ -136,8 +169,19 @@ class BackendClient {
 
         function onNodeDrawBackground(ctx)
         {
-            this.color = this.in_execution ? "#353" : null;
-            this.bgcolor = this.in_execution ? "#131" : null;
+            //change color of node to show its being executed
+            this.color = this.execution_state == 1 ? "#555" : null;
+            this.bgcolor = this.execution_state == 1 ? "#444" : null;
+
+            if( this.execution_state ) //finished
+            {
+                var y = this.size[1] + 18;
+                ctx.fillStyle = "#999";
+                if( this.execution_state == 1)
+                    ctx.fillText("Running...", 4, y);
+                else if( this.execution_state == 2 && this.execution_data)
+                    ctx.fillText("Time: " + (this.execution_data.elapsed*0.001).toFixed(1) + "s", 4, y);
+            }
         }
     }
 
@@ -199,18 +243,21 @@ class BackendClient {
                 if(event.error)
                     console.error(event.error);
                 if(target_node)
-                    session.onExecutionError( target_node, event.data );
+                    session.onExecutionError( target_node, event.data, event.time );
+                if(session.finish_callback)
+                    session.finish_callback(true);
                 break;
             case "ACTION_PROGRESS": 
                 if(target_node)
-                    session.onExecutionProgress( target_node, event.data );
+                {
+                    session.onExecutionProgress( target_node, event.std, event.data, event.time );
+                    if(this.onNodeStateUpdate)
+                        this.onNodeStateUpdate(target_node);
+                }
                 break;
             case "ACTION_FINISHED": 
                 if(target_node)
-                {
-                    target_node.in_execution = false;
                     session.onExecutionDone( target_node, event.data );
-                }
                 break;
             default: console.warn("unknown action", event.type);
         }
@@ -222,7 +269,8 @@ class BackendClient {
         if( this.sessions[ session.id ] )
             this.killSession( session );
         this.sessions[ session.id ] = session;
-        this.send({ type:"NEW_SESSION", session_id: session.id }); //wait for session ready
+        var graph_data = session.graph.serialize();
+        this.send({ type:"NEW_SESSION", session_id: session.id, data: graph_data }); //wait for session ready
         session.finish_callback = finish_callback || null;
     }
 
@@ -247,13 +295,12 @@ class BackendClient {
     {
         var session = node.graph.session;
         var action = node.constructor.info.name;
-        node.in_execution = true;
         this.send({ 
             type:"START_ACTION",
             session_id: session.id,
             node_id: node.id,
             action: action,
-            params: [] //TODO
+            params: node.params || {}
         });
     }
 
@@ -275,19 +322,55 @@ class Editor {
         else if(container.constructor === String)
             container = document.querySelector(container);
         if(!container)
-            throw("container not found");
+            throw("container passed to editor is null");
         this.container = container;
+        this.createHTML( container );
+
         this.backend = new BackendClient();
         this.backend.loadConfig().then(()=>this.onReady())
+        this.backend.onNodeStateUpdate = this.onNodeStateUpdate.bind(this);
 
         this.session = new Session(this.backend);
 
         //prepare interface
-        this.graphcanvas = new LGraphCanvas( container, null );
+        this.graphcanvas = new LGraphCanvas( this.root.querySelector("canvas"), null );
         this.graphcanvas.resize();
         this.graphcanvas.autoresize = true;
+        this.graphcanvas.onShowNodePanel = this.showNodeView.bind(this);
 
-        document.body.querySelector("#play").onclick = this.playSession.bind(this);
+        this.current_view_node = null;
+    }
+
+    createHTML(container)
+    {
+        var code = `<div class="header">
+            <h1>VACIo</h1>
+            <span class="tools">
+            <button class="play">Play</button>
+            </span>
+        </div>
+        <div class="workarea">
+            <div class='section graph litegraph'>
+                <canvas></canvas>
+            </div>
+            <div class='section node-view hidden'><div class='node-info'>
+                    <button class='exit'>Exit</button>
+                    <h2 class='node-type'>Node</h2>
+                    <div class='node-desc'></div>
+                    <h2>Parameters</h2>
+                    <div class='params-list'></div>
+                </div><div class='node-log'>
+                node log
+                </div></div>
+        </div>
+        `;
+        var root = this.root = document.createElement("div");
+        root.classList.add("vicio-editor");
+        root.innerHTML = code;
+        container.appendChild(root);
+
+        this.root.querySelector("button.play").onclick = this.playSession.bind(this);
+        this.root.querySelector("button.exit").onclick = ()=>{this.showNodeView()};
     }
 
     connect(url)
@@ -304,20 +387,103 @@ class Editor {
 
     playSession()
     {
-        var button = document.body.querySelector("#play");
+        var button = this.root.querySelector("button.play");
         button.classList.add("working");
         button.innerText = "Stop";
         this.backend.playSession( this.session, this.onSessionFinished.bind(this) );
 
     }
 
-    //called from playSession callback
-    onSessionFinished()
+    showNodeView( node )
     {
-        var button = document.body.querySelector("#play");
+        if(!node)
+        {
+            this.showSection("graph");
+            return;
+        }
+
+        if(!node.params)
+            node.params = {};
+        var action_info = node.constructor.info;
+
+        //add info
+        this.root.querySelector("h2.node-type").innerText = action_info.name;
+        this.root.querySelector(".node-desc").innerText = action_info.desc;
+
+        //add widgets
+        var params_container = this.root.querySelector(".params-list");
+        params_container.innerText = "";
+        if(action_info.params)
+        for(var i in action_info.params)
+        {
+            var elem = document.createElement("div");
+            elem.classList.add("param");
+            elem.innerHTML = "<span class='label'></span><span class='value'><input /></span>";
+            params_container.appendChild(elem);
+            var label = elem.querySelector(".label");
+            label.innerText = i;
+            var input = elem.querySelector("input");
+            input.param = i;
+            input.value = node.params[i] || "";
+            input.addEventListener("change",function(e){
+                node.params[ this.param ] = e.target.value;
+            });
+        }
+
+        //update log
+        this.refreshNodeView(node);
+        this.showSection("node-view");
+    }
+
+    refreshNodeView(node)
+    {
+        this.current_view_node = node;
+
+        //log
+        var log_area = this.root.querySelector(".workarea .node-log");
+        log_area.innerText = "";
+        if(node.log)
+        for(var i = 0; i < node.log.length; ++i)
+        {
+            var msg = node.log[i];
+            var pre = document.createElement("div");
+            pre.classList.add("log-entry");
+            pre.innerHTML = "<span class='time'></span><span class='content'></span>";
+            var d = new Date(msg.timestamp);
+            var time = padTo2Digits(d.getHours())+":"+padTo2Digits(d.getMinutes())+":"+padTo2Digits(d.getSeconds());
+            pre.querySelector(".time").innerText = time;
+            pre.querySelector(".content").innerText = msg.data;
+            if(msg.std)
+                pre.classList.add(msg.std);
+            log_area.appendChild(pre);
+        }
+    }
+
+    onNodeStateUpdate(node)
+    {
+        if(this.current_view_node == node)
+            this.refreshNodeView(node);
+    }
+
+    showSection( name )
+    {
+        var sections = this.root.querySelectorAll(".workarea .section");
+        for(var i = 0; i < sections.length; ++i)
+            sections[i].classList.add("hidden");
+        var section = this.root.querySelector(".workarea .section." + name);
+        if(section)
+            section.classList.remove("hidden");
+        if(name == "graph")
+            this.graphcanvas.resize();
+    }
+
+    //called from playSession callback
+    onSessionFinished(had_error)
+    {
+        var button = this.root.querySelector("button.play");
         button.classList.remove("working");
         button.innerText = "Play";
-        alert("Session Finished");
+        setTimeout(()=>alert("Session Finished"),100);
     }
 };
 
@@ -330,5 +496,6 @@ function generateId(length=32) {
     return result;
 }
 
+function padTo2Digits(num) { return String(num).padStart(2, '0'); }
 
 export { Editor, Session, BackendClient }

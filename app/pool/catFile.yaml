@@ -4,4 +4,4 @@ widgets:
   - label: str
     type: text
     value: ""
-script: cat hello > test_cat.txt
+script: echo hello1 > test_cat.txt

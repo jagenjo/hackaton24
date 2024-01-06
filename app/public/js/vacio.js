@@ -178,7 +178,7 @@ class BackendClient {
                 var y = this.size[1] + 18;
                 ctx.fillStyle = "#999";
                 if( this.execution_state == 1)
-                    ctx.fillText("Running...", 4, y);
+                    ctx.fillText("Running..." + "|/-\\"[((performance.now()*0.006)|0)%4], 4, y);
                 else if( this.execution_state == 2 && this.execution_data)
                     ctx.fillText("Time: " + (this.execution_data.elapsed*0.001).toFixed(1) + "s", 4, y);
             }
@@ -351,7 +351,8 @@ class Editor {
         </div>
         <div class="workarea">
             <div class='section graph litegraph'>
-                <canvas></canvas>
+                <div class='canvas-area'><canvas></canvas></div>
+                <div class='files-area'><div class='toolbar'><button class='refresh'>Refresh</button></div><div class='files-list'></div></div>
             </div>
             <div class='section node-view hidden'><div class='node-info'>
                     <button class='exit'>Exit</button>
@@ -371,6 +372,7 @@ class Editor {
 
         this.root.querySelector("button.play").onclick = this.playSession.bind(this);
         this.root.querySelector("button.exit").onclick = ()=>{this.showNodeView()};
+        this.root.querySelector("button.refresh").onclick = ()=>{this.refreshFilesView()};
     }
 
     connect(url)
@@ -456,6 +458,45 @@ class Editor {
             if(msg.std)
                 pre.classList.add(msg.std);
             log_area.appendChild(pre);
+        }
+    }
+
+    refreshFilesView( folder = "" )
+    {
+        var that = this;
+        if(folder == "..")
+            folder = "";
+        var files_area = this.root.querySelector(".files-area .files-list");
+        this.current_folder = folder;
+        return fetch("./session/"+this.session.id+"?folder="+folder).then(resp=>resp.json()).then((json)=>{
+            if(!json.files)
+                return;
+            files_area.innerText = "";
+            addFile({name:".."},".");
+            for(var i in json.files)
+            {
+                var file = json.files[i];
+                addFile(file,file.isDir ? this.current_folder + "/" + file.name : null);
+            }
+        });
+
+        function addFile(file,target)
+        {
+            var filename = file.name;
+            var pre = document.createElement("div");
+            pre.classList.add("file-entry");
+            pre.innerHTML = "<span class='name'></span>";
+            pre.querySelector(".name").innerText = filename;
+            files_area.appendChild(pre);
+            if(target)
+            {
+                pre.dataset["target"]=target;
+                pre.classList.add("folder");
+                pre.onclick = function(){ 
+                    that.refreshFilesView( this.dataset["target"] );
+                }
+            }
+            return pre;
         }
     }
 

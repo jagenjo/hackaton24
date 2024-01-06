@@ -1,4 +1,4 @@
-import fs from 'fs';
+//import fs from 'fs';
 import {ActionsDB,ActionsHost} from './actionsHost.js'
 
 var paths = {
@@ -119,10 +119,18 @@ class BackendServer
             res.end();
           });
 
-          app.get('/session',(req, res, next)=>{
+          app.get('/session/:session_id',(req, res, next)=>{
+            //console.log(req.query);
             var session_id = req.params.session_id;
-            res.send(JSON.stringify(this.getSessionInfo(session_id)));
-            res.end();
+            var folder = req.query.folder || "";
+            //console.log(req.params);
+            this.getSessionFiles(session_id, folder).then(files=>{
+                res.send(JSON.stringify({files: files}));
+                res.end();
+            }).catch((err)=>{
+                res.send(JSON.stringify({error:1,msg:err}));
+                res.end();
+            });
           });          
     }
 
@@ -131,11 +139,15 @@ class BackendServer
         return { actions: ActionsDB.actions }
     }
 
-    getSessionInfo(session_id)
+    getSessionFiles(session_id,folder = "")
     {
-        if(!session_id)
-            return {msg:"missing session_id"}
-        return {msg:"data here"}
+        var session = this.sessions[session_id];
+
+        return new Promise((resolve,reject)=>{
+            if(!session)
+                return reject({error:1, msg:"session not found: " + session_id});
+            resolve(session.getFiles(folder));
+        });
     }
 
     //called when closing the server

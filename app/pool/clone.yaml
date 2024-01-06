@@ -1,6 +1,5 @@
-name: clone
+name: clone repo
 desc: loads repo
 params:
-  repo_url : string
-  repo_branch : string
+  repo_url : https://github.com/jagenjo/hackaton24.git
 script: git clone $repo_url

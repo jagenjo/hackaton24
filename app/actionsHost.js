@@ -23,7 +23,7 @@ class ActionsHost
         //create folder
         if (fs.existsSync(this.folder))
             this.reset(); //remove content
-        console.log(" + creating host ");
+        console.log(" + creating host " + this.id);
         fs.mkdirSync(this.folder);
     }
 
@@ -83,7 +83,7 @@ class ActionsHost
 
             child.stdout.on('data', (data) => {
                 var str = data.toString();
-                console.log(" - - ", str );
+                //console.log(" - - ", str );
                 stdout.push(str);
                 if(output_callback)
                     output_callback(node_id,"out",str);
@@ -91,7 +91,7 @@ class ActionsHost
             
             child.stderr.on('data', (data) => {
                 var str = data.toString();
-                console.log(str);
+                //console.log(str);
                 stderr.push(str);
                 if(output_callback)
                     output_callback(node_id,"err",str);
@@ -136,6 +136,30 @@ class ActionsHost
     {
         //kill folder content
         this.reset();
+    }
+
+    getFiles( subfolder = "")
+    {
+        return new Promise((resolve,reject)=>{
+            var path = this.folder + "/" + subfolder;
+            if (!fs.existsSync(path))
+                return reject();
+            fs.readdir(path,{withFileTypes:true},(err, files) => { 
+                if (err)
+                {
+                  console.log(err); 
+                  return reject(err);
+                }
+                //fetch recursive
+                var r = {};
+                for(var i in files)
+                {
+                    var file = files[i];
+                    r[i] = { name: file.name, isDir: file.isDirectory() }
+                }
+                resolve(r);
+            });
+        })
     }
 }
 

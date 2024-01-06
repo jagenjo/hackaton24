@@ -1,5 +1,5 @@
 name: wget
 desc: downloads a file
 params:
-  url : string
-script: wget --no-hsts https://tamats.com/foo.txt
+  url : https://tamats.com/foo.txt
+script: wget --no-hsts $url

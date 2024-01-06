@@ -90,6 +90,36 @@ a {
   display: none;
 }
 
+.vicio-editor .workarea .section.graph {
+  position: relative;
+}
+
+.vicio-editor .canvas-area {
+  position: absolute;
+  left:0;
+  width:calc(100% - 300px);
+  height:100%;
+}
+
+.vicio-editor .files-area {
+  position: absolute;
+  right:0;
+  width:300px;
+  height:100%;
+  background-color: #1b1b1b;
+  color: #AAA;
+  padding: 10px;
+}
+.file-entry {
+  font-size: 18px;
+  font-family: monospace;
+}
+
+.file-entry.folder {
+  color: #AAF;
+  cursor: pointer;
+}
+
 .vicio-editor .workarea .node-view {
   position: relative;
 }
@@ -168,11 +198,15 @@ a {
 
 .node-view .params-list .param .value input {
   background-color: #1d1d1d;
-  color: white;
+  color: rgb(87, 177, 91);
   border: 0;
   padding: 4px;
   font-size: 20px;
   border-radius: 6px;
   text-align: right;
+}
+
+.node-view .params-list .param .value input:focus {
+  color: white;
 }
 

@@ -83,6 +83,8 @@ class BackendServer
                 //TO OD
                 break; 
             case "START_ACTION":
+                if(!session)
+                    session = this.startSession(user, event.session_id, event.data, true);
                 if(session)
                 {
                     session.executeAction(event.action, event.params, event.node_id, onNodeStd)
@@ -103,13 +105,15 @@ class BackendServer
         }
     }
 
-    startSession(user, session_id, graph_data)
+    startSession(user, session_id, graph_data,silent)
     {
         var session = new ActionsHost( session_id, paths.session );
         this.sessions[ session_id ] = session;
         user.sessions[ session_id ] = session;
         session.prepare();
-        user.send({type:"SESSION_READY",session_id,time: Date.now()});
+        if(!silent)
+            user.send({type:"SESSION_READY",session_id,time: Date.now()});
+        return session;
     }
 
     registerHTTP(app)

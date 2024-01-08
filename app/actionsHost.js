@@ -24,7 +24,8 @@ class ActionsHost
         if (fs.existsSync(this.folder))
             this.reset(); //remove content
         console.log(" + creating host " + this.id);
-        fs.mkdirSync(this.folder);
+        if (!fs.existsSync(this.folder))
+            fs.mkdirSync(this.folder);
     }
 
     executeAction( action, params, node_id, output_callback )

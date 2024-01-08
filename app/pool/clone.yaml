@@ -2,4 +2,4 @@ name: clone repo
 desc: loads repo
 params:
   repo_url : https://github.com/jagenjo/hackaton24.git
-script: git clone $repo_url
+script: git clone --verbose $repo_url

@@ -1,0 +1,6 @@
+name: npm
+desc: run npm command
+params:
+  cmd : install
+  folder: .
+script: cd $folder ;npm $cmd

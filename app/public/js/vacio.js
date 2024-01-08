@@ -339,6 +339,10 @@ class Editor {
         this.graphcanvas.onShowNodePanel = this.showNodeView.bind(this);
 
         this.current_view_node = null;
+
+        window.onbeforeunload=function(){
+            return "Are you sure to leave this page?";
+        }
     }
 
     createHTML(container)
@@ -355,7 +359,8 @@ class Editor {
                 <div class='files-area'><div class='toolbar'><button class='refresh'>Refresh</button></div><div class='files-list'></div></div>
             </div>
             <div class='section node-view hidden'><div class='node-info'>
-                    <button class='exit'>Exit</button>
+                    <div class='toolbar'><button class='run'>Run</button>
+                    <button class='exit'>Exit</button></div>
                     <h2 class='node-type'>Node</h2>
                     <div class='node-desc'></div>
                     <h2>Parameters</h2>
@@ -372,6 +377,7 @@ class Editor {
 
         this.root.querySelector("button.play").onclick = this.playSession.bind(this);
         this.root.querySelector("button.exit").onclick = ()=>{this.showNodeView()};
+        this.root.querySelector("button.run").onclick = ()=>{this.runCurrentNode()};
         this.root.querySelector("button.refresh").onclick = ()=>{this.refreshFilesView()};
     }
 
@@ -435,6 +441,12 @@ class Editor {
         //update log
         this.refreshNodeView(node);
         this.showSection("node-view");
+    }
+
+    runCurrentNode()
+    {
+        var node = this.current_view_node;
+        this.backend.executeNode(node);
     }
 
     refreshNodeView(node)

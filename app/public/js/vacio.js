@@ -43,6 +43,8 @@ class Session {
 
         this.start_node = node_start;
         this.finish_node = node_finish;
+
+        graph.start();
     }
 
     start()
@@ -96,6 +98,9 @@ class Session {
     {
         node.execution_state = 2;
 
+        //do graph stuff
+        node.onAfterExecution(execution_data);
+
         //console.log("done:",execution_data);
         if(execution_data.code != 0)
         {
@@ -115,8 +120,25 @@ class Session {
     }    
 }
 
+//used to parse command output
+var valid_rules = {}
+function registeRule(name,params,func)
+{
+    valid_rules[name] = {func,params};
+}
+registeRule("filter",0,function(data,params){ return data.filter(a=>a.indexOf(params[0])!=-1) });
+registeRule("number",0,function(data,params){ return parseFloat(data) });
+registeRule("split",1,function(data,params){ return data.split ? data.split(params[0] != null ? params[0] : " "):data;});
+registeRule("join",1,function(data,params){ return data.join(params[0]||",")});
+registeRule("first",0,function(data,params){ return data[0]});
+registeRule("last",0,function(data,params){ return data[data.length-1]});
+registeRule("at",1,function(data,params){ return data[parseInt(params[0])];});
+registeRule("range",2,function(data,params){ return data.slice(parseInt(params[0]),parseInt(params[1])) });
+
+
 //connects to backend to execute stuff remotely
 class BackendClient {
+
     constructor()
     {
         this.config = {};
@@ -154,17 +176,43 @@ class BackendClient {
             params_type = null;
         if(info.type == "end")
             return_type = null;
-        var node_class = LiteGraph.wrapFunctionAsNode("actions/" + info.name, nodeExec,params_type,return_type);
-        node_class.prototype.onAction = onNodeAction;
-        node_class.prototype.onDrawBackground = onNodeDrawBackground;
+
+        var nodedesc = {
+            inputs: [["go",LiteGraph.ACTION]],
+            outputs: [["end",LiteGraph.EVENT]],
+            onCreate(){
+            },
+            onAction: onNodeAction,
+            onDrawBackground: onNodeDrawBackground,
+            onAfterExecution: onNodeAfterExecution,
+            onGetOutputs: onNodeGetOutputs
+        };
+
+        /*
+        if(info.outputs)
+        for(var i in info.outputs)
+            nodedesc.outputs.push([i,"string"]);
+        */
+
+        var node_class = LiteGraph.buildNodeClassFromObject("actions/" + info.name, nodedesc);
         node_class.info = info;
 
         function onNodeAction(e)
         {
-            if(e == "_in")
+            if(e == "go")
                 this.graph.session.backend.executeNode(this);
             else if(e == "end") //not necessary
                 this.triggerSlot(0);
+        }
+
+        function onNodeGetOutputs()
+        {
+            var result = [];
+            var action_info = this.constructor.info;
+            if(action_info.outputs)
+            for(var i in action_info.outputs)
+                result.push([i,"string"]);
+            return result;
         }
 
         function onNodeDrawBackground(ctx)
@@ -182,6 +230,69 @@ class BackendClient {
                 else if( this.execution_state == 2 && this.execution_data)
                     ctx.fillText("Time: " + (this.execution_data.elapsed*0.001).toFixed(1) + "s", 4, y);
             }
+        }
+
+        function onNodeAfterExecution(result)
+        {
+            if(this.outputs.length<=1)
+                return;
+
+            //console.log(result.stdout);
+            var stdout = flat(result.stdout);
+            var stderr = flat(result.stderr);
+            var action_info = this.constructor.info;
+
+            for(var i = 1; i < this.outputs.length; ++i)
+            {
+                var output = this.outputs[i];
+                var rule = action_info.outputs[ output.name ];
+                if(!rule) continue;
+                var result = applyRule( rule, stdout, stderr);
+                this.setOutputData(i,result)
+            }
+        }
+
+        function flat(out)
+        {
+            var lines = [];
+            for(var i in out)
+            {
+                var line = out[i];
+                var line_split = line.split("\n");
+                for(var j in line_split)
+                {
+                    var str = line_split[j].trim();
+                    if(str.length)
+                        lines.push(str);
+                }
+                    
+            }        
+            return lines;
+        }
+
+        function applyRule(rule, stdout, stderr)
+        {
+            var actions = rule.split(":");
+            var current = "";
+            for(var i in actions)
+            {
+                var action = actions[i];
+                var t = tokenize(action);
+                switch(t[0])
+                {
+                    case "stdout": current = stdout; break;
+                    case "stderr": current = stderr; break;
+                    default:
+                        var r = valid_rules[t[0]];
+                        if(!r)
+                        {
+                            console.log("unknown rule:",t[0]);
+                            continue;
+                        }
+                        current = r.func(current,t.splice(1))
+                }
+            }
+            return current;
         }
     }
 
@@ -407,12 +518,14 @@ class Editor {
         if(!node)
         {
             this.showSection("graph");
-            return;
+            return false;
         }
 
         if(!node.params)
             node.params = {};
         var action_info = node.constructor.info;
+        if(!action_info)
+            return false;
 
         //add info
         this.root.querySelector("h2.node-type").innerText = action_info.name;
@@ -441,6 +554,7 @@ class Editor {
         //update log
         this.refreshNodeView(node);
         this.showSection("node-view");
+        return true;
     }
 
     runCurrentNode()
@@ -550,5 +664,24 @@ function generateId(length=32) {
 }
 
 function padTo2Digits(num) { return String(num).padStart(2, '0'); }
+
+function tokenize(str)
+{
+    //The parenthesis in the regex creates a captured group within the quotes
+    var myRegexp = /[^\s"]+|"([^"]*)"/gi;
+    var result = [];
+
+    do {
+        //Each call to exec returns the next regex match as an array
+        var match = myRegexp.exec(str);
+        if (match != null)
+        {
+            //Index 1 in the array is the captured group if it exists
+            //Index 0 is the matched text, which we use if no captured group exists
+            result.push(match[1] ? match[1] : match[0]);
+        }
+    } while (match != null);
+    return result; 
+}
 
 export { Editor, Session, BackendClient }

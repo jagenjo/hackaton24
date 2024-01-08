@@ -105,7 +105,7 @@ class BackendServer
         }
     }
 
-    startSession(user, session_id, graph_data,silent)
+    startSession(user, session_id, graph_data, silent)
     {
         var session = new ActionsHost( session_id, paths.session );
         this.sessions[ session_id ] = session;
@@ -113,6 +113,8 @@ class BackendServer
         session.prepare();
         if(!silent)
             user.send({type:"SESSION_READY",session_id,time: Date.now()});
+        else
+            console.log("action silent");
         return session;
     }
 

@@ -107,6 +107,7 @@ class ActionsHost
             
             child.on('exit', (code) => {
               //console.log(` * Action finished code ${code}`);
+              console.log(" ## finished action:", action, code);
               var index = that.child_processes.indexOf(this);
               that.child_processes.splice(index,1);
               var elapsed = performance.now() - start_time;
@@ -177,7 +178,10 @@ var ActionsDB = {
             if(files[i].indexOf("yaml") != -1)
             {
                 var action = this.registerAction(path + "/" + files[i]);
-                console.log(" * " + action.name + " :: " + action.desc)
+                if(action)
+                    console.log(" * " + action.name + " :: " + action.desc)
+                else
+                    console.log(" - Error parsing action yaml: " + files[i])
             }
 
         if(check_changes)
@@ -197,7 +201,9 @@ var ActionsDB = {
     registerAction(action_path)
     {
         var data = fs.readFileSync(action_path, 'utf8');
-        var node_info = YAML.parse(data)
+        var node_info = YAML.parse(data);
+        if(!node_info)
+            return null;
         this.actions[ node_info.name ] = node_info;
         return node_info
     }    
@@ -216,11 +222,11 @@ function tokenize(str)
         {
             //Index 1 in the array is the captured group if it exists
             //Index 0 is the matched text, which we use if no captured group exists
-            result.push(match[1] ? match[1] : match[0]);
+            result.push(match[1] ? '"'+match[1]+'"' : match[0]);
         }
     } while (match != null);
     return result; 
 }
 
 
-export { ActionsHost, ActionsDB }
+export { ActionsHost, ActionsDB, tokenize }

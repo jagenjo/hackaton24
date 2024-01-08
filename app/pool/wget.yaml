@@ -2,4 +2,8 @@ name: wget
 desc: downloads a file
 params:
   url : https://tamats.com/foo.txt
-script: wget --no-hsts $url
+outputs:
+  date: stderr:filter "Date":first:split:last
+  type: stderr:filter "Content-Type":first:split:last
+  size: stderr:filter "Content-Length":first:split:last:number
+script: wget -S --no-hsts $url

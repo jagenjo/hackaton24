@@ -184,7 +184,9 @@ class BackendClient {
             },
             onAction: onNodeAction,
             onDrawBackground: onNodeDrawBackground,
+            onBeforeExecution: onNodeBeforeExecution, 
             onAfterExecution: onNodeAfterExecution,
+            onGetInputs: onNodeGetInputs,
             onGetOutputs: onNodeGetOutputs
         };
 
@@ -204,6 +206,16 @@ class BackendClient {
             else if(e == "end") //not necessary
                 this.triggerSlot(0);
         }
+
+        function onNodeGetInputs()
+        {
+            var result = [];
+            var action_info = this.constructor.info;
+            if(action_info.params)
+            for(var i in action_info.params)
+                result.push([i,"string"]);
+            return result;
+        }        
 
         function onNodeGetOutputs()
         {
@@ -229,6 +241,23 @@ class BackendClient {
                     ctx.fillText("Running..." + "|/-\\"[((performance.now()*0.006)|0)%4], 4, y);
                 else if( this.execution_state == 2 && this.execution_data)
                     ctx.fillText("Time: " + (this.execution_data.elapsed*0.001).toFixed(1) + "s", 4, y);
+            }
+        }
+
+        function onNodeBeforeExecution()
+        {
+            if(this.inputs.length<=1)
+                return;
+            if(!this.params)
+                this.params = {};
+            for(var i = 1; i < this.inputs.length; ++i)
+            {
+                var input = this.inputs[i];
+                var data = null;
+                if(input.link != null)
+                    data = this.getInputData(i);
+                if(data != null)
+                    this.params[ input.name ] = data;
             }
         }
 
@@ -404,6 +433,9 @@ class BackendClient {
     //send signal to backed to execute
     executeNode(node)
     {
+        //do graph stuff
+        node.onBeforeExecution();
+
         var session = node.graph.session;
         var action = node.constructor.info.name;
         this.send({ 
